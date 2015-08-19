@@ -50,12 +50,12 @@ public:
 	}
 	
 	/**
-	 *\brief 初始化trunk类
+	 *\brief 使用此通道外呼后对乘员变量赋值
 	 *
 	 */
-	void init(const std::string& caller_id,const std::string& called_id,const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
+	void reset_trunk(const std::string& caller_id,const std::string& called_id,const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
 	{
-		m_step = TRK_IDLE;
+		m_step = TRK_CALLOUT_DAIL;
 		this->m_caller_id = caller_id;
 		this->m_called_id = called_id;
 		this->m_transId = transId;
