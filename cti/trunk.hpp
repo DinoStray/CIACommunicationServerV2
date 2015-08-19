@@ -6,7 +6,6 @@
 #include <string>
 #include <memory>
 
-#include <boost/timer.hpp>
 #include <boost/thread.hpp>
 #include <boost/timer/timer.hpp>
 
