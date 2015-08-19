@@ -34,14 +34,13 @@ enum trunk_state {
 */
 class trunk
 {
+private:
+	boost::timer::cpu_timer        m_callTime;	           // 发起呼叫的时间
 public:
 	trunk_state                    m_step;	               // 当前通道的状态  //
 	std::string                    m_caller_id;            // 主叫号码*
 	std::string                    m_called_id;	           // 被叫号码*
 	std::string                    m_transId;              // 业务流水号*
-	//TODO 此为V1版本boost timer库， 考虑改为V2版本
-	//已更改
-	boost::timer::cpu_timer        m_callTime;	           // 发起呼叫的时间
 	bool                           m_hungup_by_echo_tone;  // 是否响一声挂机, false 非响一声挂机情况仅限于测试用, 生产环境设置为 true, 保证响一声立即挂机*
 	boost::mutex                   m_trunk_mutex;          // 通道状态锁
 	boost::shared_ptr<base_client> m_client_socket;	       // 每次呼叫时，需要配合其他组件保存的信息*
