@@ -14,6 +14,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/thread.hpp>
 
 const std::size_t TIMEOUT_CHECK_ELAPSED = 3000;
 
@@ -61,6 +62,7 @@ private:
 	bool m_is_login;
 	boost::shared_ptr<base_voice_card_control> m_base_voice_card;
 	boost::shared_ptr<config_server> m_config_server;
+	boost::mutex m_mutex;
 };
 
 cia_client::cia_client(io_service& service, boost::shared_ptr<config_server> config_server_, boost::shared_ptr<base_voice_card_control> base_voice_card) :
@@ -161,6 +163,7 @@ void cia_client::do_write(chat_message ch_msg)
 	ptr self = shared_from_this();
 	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步发送数据";
 	BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为::" << std::endl << ch_msg.m_procbuffer_msg.DebugString();
+	m_mutex.lock();
 	m_sock_.async_send(boost::asio::buffer(_ch_msg->data(), _ch_msg->length()),
 		[this, self, _ch_msg](boost::system::error_code ec, std::size_t /*length*/){
 		m_write_msg_queue_.Put(_ch_msg);
@@ -174,6 +177,7 @@ void cia_client::do_write(chat_message ch_msg)
 			m_update_time = boost::posix_time::microsec_clock::local_time();
 		}
 	});
+	m_mutex.unlock();
 }
 
 void cia_client::do_timeout_check()

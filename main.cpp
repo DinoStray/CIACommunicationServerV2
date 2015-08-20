@@ -29,8 +29,8 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	boost::shared_ptr<config_server> config_server_ = boost::make_shared<config_server>(argv[1], argv[2]);
-	//testNetLogic(config_server_);
-	testCTI(config_server_);
+	testNetLogic(config_server_);
+	//testCTI(config_server_);
 	//test_all(config_server_);
 	//test_config_server(config_server_);
 	boost::this_thread::sleep_for(boost::chrono::seconds(3));
@@ -89,7 +89,7 @@ void testCTI(boost::shared_ptr<config_server> config_server_)
 		boost::shared_ptr<base_client> client_ptr = boost::make_shared<base_client>();
 		BOOST_LOG_SEV(cia_g_logger, Critical) << ">>>>>--------------------------------------------------------------------第一波检测, 测试10次呼叫, 响一声挂断--------------------------------------------------------------------<<<<<";
 		for (size_t i = 0; i < 10; i++)
-		{		
+		{
 			p_vcc->cti_callout(boost::make_shared<cti_call_out_param>(client_ptr, std::to_string(trans_id++), callerNum, calledNum));
 			boost::this_thread::sleep_for(boost::chrono::seconds(20));
 		}

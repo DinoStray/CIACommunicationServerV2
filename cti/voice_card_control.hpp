@@ -190,7 +190,7 @@ int voice_card_control::timeout_check()
 			boost::shared_ptr<trunk> trunk = m_trunk_vector.at(i);
 			if (trunk->m_step != TRK_IDLE)
 			{
-				if (trunk->m_callTime.elapsed() >= m_timeout_elapse){
+				if (trunk->elpased() >= m_timeout_elapse){
 					// 如果当前语音卡组件为非响一声挂机， 则m_hungup_by_echo_tone值为false， 在cti_hangUp函数中不会做挂断处理， 所以在此处改值为true
 					if (!trunk->m_hungup_by_echo_tone){
 						boost::unique_lock<boost::mutex> unique_lock_(trunk->m_trunk_mutex, boost::defer_lock);
@@ -244,13 +244,8 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 		boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex, boost::defer_lock);
 		if (unique_lock_.try_lock())
 		{
-			t->m_client_socket = cti_call_out_param_->m_base_client;
-			t->m_transId = cti_call_out_param_->m_transId;
-			t->m_caller_id = cti_call_out_param_->m_authCode;
-			t->m_called_id = cti_call_out_param_->m_pn;
-			t->m_hungup_by_echo_tone = cti_call_out_param_->m_hungup_by_echo_tone;
+			t->init(cti_call_out_param_->m_authCode, cti_call_out_param_->m_authCode, cti_call_out_param_->m_transId, cti_call_out_param_->m_hungup_by_echo_tone, cti_call_out_param_->m_base_client);
 			t->m_step = TRK_CALLOUT_DAIL;
-			t->m_callTime.restart();
 		}
 		else
 		{
@@ -365,7 +360,14 @@ int voice_card_control::cti_hangUp(std::size_t channelID, std::string status)
 		msg.set_type(CIA_CALL_RESPONSE);
 		msg.set_transid(t->m_transId);
 		msg.set_status(status);
-		t->m_client_socket->do_write(chat_message(msg));
+		if (t->m_client_socket == nullptr)
+		{
+			BOOST_LOG_SEV(cia_g_logger, Critical) << "严重异常: 挂机时发现客户端socket为空";
+		}
+		else
+		{
+			t->m_client_socket->do_write(chat_message(msg));
+		}
 		t->realseTrunk();
 		m_channel_queue.put(channelID);
 	}
@@ -415,7 +417,7 @@ int CALLBACK voice_card_control::cti_callback(WORD wEvent, int nReference, DWORD
 			//nReference 通道的逻辑编号
 			//dwParam 高16位比特表示通道的上一个状态值；低16位比特表示通道的新状态值。有关通道状态的取值及其描述请参见函数SsmGetChState的说明
 			BOOST_LOG_SEV(cia_g_logger, AllEvent) << "业务流水:" << m_trunk_vector.at(nReference)->m_transId
-				<< " 语音卡事件: E_CHG_ChState 状态机：通道状态发生变化, 通道的逻辑编号: " << nReference
+				<< " 语音卡事件: E_CHG_ChState 状态机：通道状态发生变化, 通道的逻辑编号:" << nReference
 				<< ", 通道状态转换值:" << dwParam;
 			return 1;
 			break;
@@ -463,24 +465,24 @@ int voice_card_control::deal_e_proc_auto_dial(int nReference, DWORD dwParam, DWO
 		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << m_trunk_vector.at(nReference)->m_transId
 			<< " 在判断ACM后, 接收到 DIAL_ECHOTONE 事件, 挂机. 通道号码:" << channelID;
 		BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << "业务流水:" << m_trunk_vector.at(nReference)->m_transId
-			<< " 本次从呼叫到检测振铃, 共用时: " << m_trunk_vector.at(nReference)->m_callTime.elapsed();
+			<< " 本次从呼叫到检测振铃, 共用时: " << m_trunk_vector.at(nReference)->elpased();
 		{
 			boost::shared_ptr<trunk> t = m_trunk_vector.at(nReference);
 			if (m_use_strategy)
 			{
-				if (t->m_callTime.elapsed() <= m_cti_warning_elapse)
+				if (t->elpased() <= m_cti_warning_elapse)
 				{
 					BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << "业务流水:" << t->m_transId << " 本次呼叫触发延迟策略";
-					boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex, boost::defer_lock);
-					if (unique_lock_.try_lock())
+					if (t->m_trunk_mutex.try_lock())
 					{
 						t->m_step = TRK_SLEEP;
+						t->m_trunk_mutex.unlock();
+						m_sleep_channel_queue.put(channelID);//放入需要做延迟挂机处理的队列中
 					}
 					else
 					{
 						BOOST_LOG_SEV(cia_g_logger, Critical) << "业务流水:" << t->m_transId << "将通道号码放入延迟队列前，尝试改变通道状态， 但试图锁定通道失败";
 					}				
-					m_sleep_channel_queue.put(channelID);//放入需要做延迟挂机处理的队列中
 					return 1;
 				}
 			}

@@ -6,7 +6,6 @@
 #include <string>
 #include <memory>
 
-#include <boost/timer.hpp>
 #include <boost/thread.hpp>
 #include <boost/timer/timer.hpp>
 
@@ -39,8 +38,6 @@ public:
 	std::string                    m_caller_id;            // 主叫号码*
 	std::string                    m_called_id;	           // 被叫号码*
 	std::string                    m_transId;              // 业务流水号*
-	//TODO 此为V1版本boost timer库， 考虑改为V2版本
-	//已更改
 	boost::timer::cpu_timer        m_callTime;	           // 发起呼叫的时间
 	bool                           m_hungup_by_echo_tone;  // 是否响一声挂机, false 非响一声挂机情况仅限于测试用, 生产环境设置为 true, 保证响一声立即挂机*
 	boost::mutex                   m_trunk_mutex;          // 通道状态锁
@@ -50,12 +47,12 @@ public:
 	{
 		m_step = TRK_IDLE;
 	}
-	
+
 	/**
 	 *\brief 初始化trunk类
 	 *
 	 */
-	void init(const std::string& caller_id,const std::string& called_id,const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
+	void init(const std::string& caller_id, const std::string& called_id, const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
 	{
 		m_step = TRK_IDLE;
 		this->m_caller_id = caller_id;
