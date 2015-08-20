@@ -33,12 +33,13 @@ enum trunk_state {
 */
 class trunk
 {
-public:
-	trunk_state                    m_step;	               // 当前通道的状态  //
-	std::string                    m_caller_id;            // 主叫号码*
-	std::string                    m_called_id;	           // 被叫号码*
-	std::string                    m_transId;              // 业务流水号*
+private:
 	boost::timer::cpu_timer        m_callTime;	           // 发起呼叫的时间
+public:
+	trunk_state                    m_step;	               // 当前通道的状态  
+	std::string                    m_caller_id;            // 主叫号码
+	std::string                    m_called_id;	           // 被叫号码
+	std::string                    m_transId;              // 业务流水号
 	bool                           m_hungup_by_echo_tone;  // 是否响一声挂机, false 非响一声挂机情况仅限于测试用, 生产环境设置为 true, 保证响一声立即挂机*
 	boost::mutex                   m_trunk_mutex;          // 通道状态锁
 	boost::shared_ptr<base_client> m_client_socket;	       // 每次呼叫时，需要配合其他组件保存的信息*
@@ -49,12 +50,13 @@ public:
 	}
 
 	/**
-	 *\brief 初始化trunk类
+	 *\brief 使用此通道外呼后对乘员变量赋值
 	 *
 	 */
-	void init(const std::string& caller_id, const std::string& called_id, const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
+
+	void reset_trunk(const std::string& caller_id,const std::string& called_id,const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
 	{
-		m_step = TRK_IDLE;
+		m_step = TRK_CALLOUT_DAIL;
 		this->m_caller_id = caller_id;
 		this->m_called_id = called_id;
 		this->m_transId = transId;

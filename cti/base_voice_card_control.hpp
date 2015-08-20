@@ -3,41 +3,36 @@
 #include "../system/include_sys.h"
 #include "../net_logic/base_client.hpp"
 #include "../tools/boost_log.hpp"
-
-#include <boost/chrono.hpp>
 #include <boost/asio.hpp>
+#include <boost/timer/timer.hpp>
 
 #include <memory>
 #include <string>
 
 /**
- * \brief 呼叫请求入参结构体
- *
- * \author LYL QQ-331461049
- * \date 2015/08/18 14:15
- */
+* \brief 呼叫请求入参结构体
+*
+* \author LYL QQ-331461049
+* \date 2015/08/18 14:15
+*/
 using namespace boost::chrono;
 struct cti_call_out_param
 {
-
-	typedef boost::chrono::time_point<boost::chrono::system_clock> cia_time_point;
 	typedef boost::shared_ptr<boost::asio::deadline_timer> cia_timer;
-
 public:
-	cti_call_out_param(boost::shared_ptr<base_client> base_client, std::string transId, std::string authCode, std::string pn, bool hungup_by_echo_tone = true)
+	cti_call_out_param(boost::shared_ptr<base_client> base_client, const std::string& transId, const std::string& authCode, const std::string& pn, bool hungup_by_echo_tone = true)
 	{
 		m_base_client = base_client;
 		m_transId = transId;
 		m_authCode = authCode;
 		m_pn = pn;
 		m_hungup_by_echo_tone = hungup_by_echo_tone;
-		m_call_time = boost::chrono::system_clock::now();
 		m_repeat_call_out = true;
+		m_call_time.start();
 	}
-	__int64 cti_call_out_elapsed_milliseconds()
+	int cti_call_out_elapsed_milliseconds()
 	{
-		auto duration = boost::chrono::duration_cast<boost::chrono::milliseconds>(boost::chrono::system_clock::now() - m_call_time);
-		return duration.count();
+		return (int)(m_call_time.elapsed().wall)/1000000;
 	}
 	boost::shared_ptr<base_client> m_base_client;	       // 用于调用do_write函数， 实现对呼叫结果的写入
 	std::string                    m_transId;	           // 业务流水
@@ -47,15 +42,15 @@ public:
 	cia_timer                      m_repeat_call_out_timer;// 用于重复呼叫的定时器
 	bool                           m_repeat_call_out;      // 本次呼叫如果失败，是否继续呼叫，当语音卡通道繁忙导致无法呼叫， 会循环反复呼叫，直到超时。当第一次呼叫失败了，会尝试第二次呼叫， 提高成功率，避免因通道问题造成呼叫失败
 private:
-	cia_time_point                 m_call_time;            // 发送呼叫请求的时间
+	boost::timer::cpu_timer		   m_call_time;            // 发送呼叫请求计时
 };
 
 /**
- * \brief 语音卡基类， 模拟语音卡操作， 用于单独测试其他组件
- *
- * \author LYL QQ-331461049
- * \date 2015/08/18 13:56
- */
+* \brief 语音卡基类， 模拟语音卡操作， 用于单独测试其他组件
+*
+* \author LYL QQ-331461049
+* \date 2015/08/18 13:56
+*/
 class base_voice_card_control
 {
 public:
