@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <exception>
 #include <iostream>
+
+
 void testNetLogic(boost::shared_ptr<config_server> config_server_);
 void testCTI(boost::shared_ptr<config_server> config_server_);
 void test_all(boost::shared_ptr<config_server> config_server_);
@@ -59,17 +61,10 @@ void testNetLogic(boost::shared_ptr<config_server> config_server_)
 {
 	boost::shared_ptr<base_voice_card_control> p_vcc = boost::make_shared<base_voice_card_control>();
 	boost::shared_ptr<cia_server> cs = boost::make_shared<cia_server>(config_server_, p_vcc);
-	cs->start();
+	//cs->start();
 	config_server_->set_started(true);
 	std::string readLine;
-	while (true){
-		std::cin >> readLine;
-		if (readLine == "quit")
-		{
-			break;
-		}
-		boost::this_thread::sleep_for(boost::chrono::seconds(1));
-	};
+	system("pause");
 }
 
 void testCTI(boost::shared_ptr<config_server> config_server_)
@@ -90,7 +85,11 @@ void testCTI(boost::shared_ptr<config_server> config_server_)
 		BOOST_LOG_SEV(cia_g_logger, Critical) << ">>>>>--------------------------------------------------------------------第一波检测, 测试10次呼叫, 响一声挂断--------------------------------------------------------------------<<<<<";
 		for (size_t i = 0; i < 10; i++)
 		{
-			p_vcc->cti_callout(boost::make_shared<cti_call_out_param>(client_ptr, std::to_string(trans_id++), callerNum, calledNum));
+			boost::shared_ptr<chat_message> chat_msg_ = boost::make_shared<chat_message>();
+			chat_msg_->m_procbuffer_msg.set_transid(std::to_string(trans_id++));
+			chat_msg_->m_procbuffer_msg.set_authcode(callerNum);
+			chat_msg_->m_procbuffer_msg.set_pn(calledNum);
+			p_vcc->cti_callout(boost::make_shared<cti_call_out_param>(client_ptr, chat_msg_, true));
 			boost::this_thread::sleep_for(boost::chrono::seconds(20));
 		}
 		//callerNum = "86051882";

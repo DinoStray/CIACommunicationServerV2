@@ -7,7 +7,7 @@
 class base_client
 {
 public:
-	virtual void do_write(chat_message ch_msg)
+	virtual void do_write(boost::shared_ptr<chat_message> ch_msg)
 	{
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "模拟客户端socket发送呼叫结果";
 	};

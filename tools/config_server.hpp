@@ -108,10 +108,10 @@ m_current_node_path(current_node_path), m_zookeeper_server_ip_port(zookeeper_ser
  */
 void config_server::set_idol_channel_number(std::size_t idol_channel_number)
 {
-	//if (!zk_set_data(m_current_node_path + ZOO_PATH_FREE_CHANNEL_NUM, std::to_string(idol_channel_number)))
-	//{
-	//	BOOST_LOG_SEV(cia_g_logger, Critical) << "设置空闲通道数失败";
-	//}
+	if (!zk_set_data(m_current_node_path + ZOO_PATH_FREE_CHANNEL_NUM, std::to_string(idol_channel_number)))
+	{
+		BOOST_LOG_SEV(cia_g_logger, Critical) << "设置空闲通道数失败";
+	}
 }
 
 /**
@@ -121,19 +121,19 @@ void config_server::set_idol_channel_number(std::size_t idol_channel_number)
  */
 void config_server::set_started(bool status)
 {
-	// /auth/ip/status(状态(1:正常 2:关闭)), 应用每次启动关闭均需设置
-	//if (status == true)
-	//{
-	//	m_started = "1";
-	//}
-	//else
-	//{
-	//	m_started = "2";
-	//}
-	//if (!zk_set_data(m_current_node_path + ZOO_PATH_STATUS, m_started))
-	//{
-	//	BOOST_LOG_SEV(cia_g_logger, Critical) << "设置通讯端状态失败";
-	//}
+	/// auth / ip / status(状态(1:正常 2 : 关闭)), 应用每次启动关闭均需设置
+	if (status == true)
+	{
+		m_started = "1";
+	}
+	else
+	{
+		m_started = "2";
+	}
+	if (!zk_set_data(m_current_node_path + ZOO_PATH_STATUS, m_started))
+	{
+		BOOST_LOG_SEV(cia_g_logger, Critical) << "设置通讯端状态失败";
+	}
 }
 
 /**

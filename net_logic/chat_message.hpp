@@ -27,6 +27,21 @@ public:
 		m_procbuffer_msg = msg;
 	}
 
+	bool parse_to_cia_msg()
+	{
+		body_length(m_procbuffer_msg.ByteSize());
+		if (!m_procbuffer_msg.SerializeToArray(body(), m_procbuffer_msg.ByteSize()))
+		{
+			return false;
+		}
+		encode_header();
+		return true;
+	}
+	bool parse_cia_mag()
+	{
+		return m_procbuffer_msg.ParseFromArray(body(), body_length());
+	}
+
 	const char* data() const
 	{
 		return m_data;

@@ -20,29 +20,25 @@ struct cti_call_out_param
 {
 	typedef boost::shared_ptr<boost::asio::deadline_timer> cia_timer;
 public:
-	cti_call_out_param(boost::shared_ptr<base_client> base_client, const std::string& transId, const std::string& authCode, const std::string& pn, bool hungup_by_echo_tone = true)
+	cti_call_out_param(boost::shared_ptr<base_client> base_client, boost::shared_ptr<chat_message> ch_msg, bool hungup_by_echo_tone = true)
 	{
 		m_base_client = base_client;
-		m_transId = transId;
-		m_authCode = authCode;
-		m_pn = pn;
+		m_ch_msg = ch_msg;
 		m_hungup_by_echo_tone = hungup_by_echo_tone;
 		m_repeat_call_out = true;
 		m_call_time.start();
 	}
 	int cti_call_out_elapsed_milliseconds()
 	{
-		return (int)(m_call_time.elapsed().wall)/1000000;
+		return (int)(m_call_time.elapsed().wall / 1000000);
 	}
-	boost::shared_ptr<base_client> m_base_client;	       // 用于调用do_write函数， 实现对呼叫结果的写入
-	std::string                    m_transId;	           // 业务流水
-	std::string                    m_authCode;             // 主叫号码
-	std::string                    m_pn;                   // 被叫号码
-	bool                           m_hungup_by_echo_tone;  // 是否响一声后挂断, 默认true, 生产环境均需做此设置, 调试语音卡的时候, 可以设置false, 外呼不会响一声挂断, 但会被超时检测线程挂断
-	cia_timer                      m_repeat_call_out_timer;// 用于重复呼叫的定时器
-	bool                           m_repeat_call_out;      // 本次呼叫如果失败，是否继续呼叫，当语音卡通道繁忙导致无法呼叫， 会循环反复呼叫，直到超时。当第一次呼叫失败了，会尝试第二次呼叫， 提高成功率，避免因通道问题造成呼叫失败
+	boost::shared_ptr<chat_message> m_ch_msg;			    // 每次请求的会话信息
+	boost::shared_ptr<base_client>  m_base_client;	        // 用于调用do_write函数， 实现对呼叫结果的写入
+	bool                            m_hungup_by_echo_tone;  // 是否响一声后挂断, 默认true, 生产环境均需做此设置, 调试语音卡的时候, 可以设置false, 外呼不会响一声挂断, 但会被超时检测线程挂断
+	cia_timer                       m_repeat_call_out_timer;// 用于重复呼叫的定时器
+	bool                            m_repeat_call_out;      // 本次呼叫如果失败，是否继续呼叫，当语音卡通道繁忙导致无法呼叫， 会循环反复呼叫，直到超时。当第一次呼叫失败了，会尝试第二次呼叫， 提高成功率，避免因通道问题造成呼叫失败
 private:
-	boost::timer::cpu_timer		   m_call_time;            // 发送呼叫请求计时
+	boost::timer::cpu_timer		    m_call_time;            // 发送呼叫请求计时
 };
 
 /**
@@ -65,12 +61,13 @@ public:
 	*/
 	virtual void cti_callout(boost::shared_ptr<cti_call_out_param> cti_call_out_param_)
 	{
-		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "模拟发送呼叫请求";
-		ciaMessage msg;
-		msg.set_type(CIA_CALL_RESPONSE);
-		msg.set_transid(cti_call_out_param_->m_transId);
-		msg.set_status(CIA_CALL_SUCCESS);
-		cti_call_out_param_->m_base_client->do_write(chat_message(msg));
+		//d BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "模拟发送呼叫请求";
+		std::string strans_id_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg.transid();
+		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.Clear();
+		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.set_type(CIA_CALL_RESPONSE);
+		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.set_transid(strans_id_);
+		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.set_status(CIA_CALL_SUCCESS);
+		cti_call_out_param_->m_base_client->do_write(cti_call_out_param_->m_ch_msg);
 	};
 
 	/**

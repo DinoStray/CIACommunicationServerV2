@@ -99,7 +99,7 @@ void cia_client_socket::do_read_body()
 		{
 			chat_message ch_msg = m_read_msg_;
 			BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
-			do_read_header();
+			//do_read_header();
 			ciaMessage msg;
 			if (!msg.ParseFromArray(ch_msg.body(), ch_msg.body_length())) {
 				BOOST_LOG_SEV(cia_g_logger, Debug) << "报文转换失败, 本次请求不做处理";
@@ -131,6 +131,7 @@ void cia_client_socket::do_write(chat_message ch_msg)
 		else
 		{
 			BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << _ch_msg->m_procbuffer_msg.transid();
+			do_read_header();
 		}
 	});
 }

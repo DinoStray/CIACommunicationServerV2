@@ -34,15 +34,11 @@ enum trunk_state {
 class trunk
 {
 private:
-	boost::timer::cpu_timer        m_callTime;	           // 发起呼叫的时间
+	boost::timer::cpu_timer               m_callTime;	            // 发起呼叫的时间
 public:
-	trunk_state                    m_step;	               // 当前通道的状态  
-	std::string                    m_caller_id;            // 主叫号码
-	std::string                    m_called_id;	           // 被叫号码
-	std::string                    m_transId;              // 业务流水号
-	bool                           m_hungup_by_echo_tone;  // 是否响一声挂机, false 非响一声挂机情况仅限于测试用, 生产环境设置为 true, 保证响一声立即挂机*
-	boost::mutex                   m_trunk_mutex;          // 通道状态锁
-	boost::shared_ptr<base_client> m_client_socket;	       // 每次呼叫时，需要配合其他组件保存的信息*
+	trunk_state                           m_step;	                // 当前通道的状态  
+	boost::shared_ptr<cti_call_out_param> m_call_out_param;         // 保存本次呼叫相关信息
+	boost::mutex                          m_trunk_mutex;            // 通道锁
 
 	trunk()
 	{
@@ -54,14 +50,10 @@ public:
 	 *
 	 */
 
-	void reset_trunk(const std::string& caller_id,const std::string& called_id,const std::string& transId, bool hungup_by_echo_tone, boost::shared_ptr<base_client> client_socket)
+	void reset_trunk(boost::shared_ptr<cti_call_out_param> call_out_param_)
 	{
 		m_step = TRK_CALLOUT_DAIL;
-		this->m_caller_id = caller_id;
-		this->m_called_id = called_id;
-		this->m_transId = transId;
-		this->m_hungup_by_echo_tone = hungup_by_echo_tone;
-		this->m_client_socket = client_socket;
+		m_call_out_param = call_out_param_;
 		m_callTime.start();
 	}
 	/**
@@ -69,9 +61,9 @@ public:
 	*
 	* \return 返回 获取通道被占用的时间， 单位：毫秒
 	*/
-	int elpased()
+	std::size_t elpased()
 	{
-		return (int)(m_callTime.elapsed().wall / 1000000);
+		return (std::size_t)(m_callTime.elapsed().wall / 1000000);
 	}
 
 	/**
@@ -81,12 +73,8 @@ public:
 	void realseTrunk()
 	{
 		m_step = TRK_IDLE;
-		m_caller_id.clear();
-		m_called_id.clear();
-		m_transId.clear();
 		m_callTime.start();
-		m_hungup_by_echo_tone = true;
-		m_client_socket.reset();
+		m_call_out_param.reset();
 	}
 };
 
