@@ -187,23 +187,16 @@ int voice_card_control::timeout_check()
 		for (size_t i = 0; i < m_trunk_vector.size(); i++)
 		{
 			boost::shared_ptr<trunk> trunk = m_trunk_vector.at(i);
-			if (trunk->m_step != TRK_IDLE)
+			boost::unique_lock<boost::mutex> unique_lock_(trunk->m_trunk_mutex, boost::defer_lock);
+			if (unique_lock_.try_lock() && trunk->m_step != TRK_IDLE)
 			{
 				if (trunk->elpased() >= m_timeout_elapse){
 					// 如果当前语音卡组件为非响一声挂机， 则m_hungup_by_echo_tone值为false， 在cti_hangUp函数中不会做挂断处理， 所以在此处改值为true
 					if (!trunk->m_call_out_param->m_hungup_by_echo_tone){
-						boost::unique_lock<boost::mutex> unique_lock_(trunk->m_trunk_mutex, boost::defer_lock);
-						if (unique_lock_.try_lock())
-						{
-							trunk->m_call_out_param->m_hungup_by_echo_tone = true;
-						}
-						else
-						{
-							BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trunk->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid() << " 语音通道超时, 尝试做挂断操作, 但当前语音卡通道被锁, 放弃挂机, 语音卡通道号 : " << i;
-							continue;
-						}
+						trunk->m_call_out_param->m_hungup_by_echo_tone = true;
 					}
 					BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trunk->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid() << " 语音通道超时, 强制挂断处理, 语音卡通道号 : " << i;
+					unique_lock_.unlock();
 					cti_hangUp(i, CIA_CALL_FAIL);
 				}
 			}
@@ -236,20 +229,19 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 		cti_callout_again(cti_call_out_param_);
 		return;
 	}
-	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 获取到得通道状态为:" << SsmChkAutoDial(chID) << ", 通道号码:" << chID;
+	int ch_state = SsmChkAutoDial(chID);
+	if (ch_state != 0)
+	{
+		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " , 获取到得通道状态为:" << ch_state << ", 不可用，将此通道重新放回。通道号码:" << chID;
+		m_channel_queue.put(chID);
+	}
+	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 获取到的通道号码:" << chID;
 	SsmSetTxCallerId(chID, msg_.authcode().c_str());
 	if (SsmAutoDial(chID, msg_.pn().c_str()) == 0){
 		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 已发送请求, 已将此通道对应状态清空, 通道号码:" << chID;
 		boost::shared_ptr<trunk> t = m_trunk_vector.at(chID);
-		boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex, boost::defer_lock);
-		if (unique_lock_.try_lock())
-		{
-			t->reset_trunk(cti_call_out_param_);
-		}
-		else
-		{
-			BOOST_LOG_SEV(cia_g_logger, Critical) << "业务流水:" << msg_.transid() << ", 严重异常， 被分配的语音通道处于占用状态， 请程序猿通宵解决问题";
-		}
+		boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex);
+		t->reset_trunk(cti_call_out_param_);
 	}
 	else {
 		m_channel_queue.put(chID);
@@ -334,37 +326,37 @@ int voice_card_control::cti_hangUp(std::size_t channelID, std::string status)
 		return -1;
 	}
 	else
-	{
-		if (!t->m_call_out_param->m_hungup_by_echo_tone)
-		{
-			BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << " 由于设置非响一声挂断, 未挂断本次呼叫请求, 等待超时挂断， 通道号码:" << channelID;
-			return -1;
-		}
+	{		
 		switch (t->m_step)
 		{
 		case TRK_IDLE:
-			BOOST_LOG_SEV(cia_g_logger, Warning) << " 依据当前通道状态判断可能出现重复挂机, 请在后续版本调查原因, 通道号码:" << channelID;
+			BOOST_LOG_SEV(cia_g_logger, Warning) << "依据当前通道状态判断可能出现重复挂机, 请在后续版本调查原因, 通道号码:" << channelID;
 			return -1;
 		case TRK_SLEEP:
-			BOOST_LOG_SEV(cia_g_logger, Warning) << " 当前通道正在延迟挂机, 通道号码:" << channelID;
+			BOOST_LOG_SEV(cia_g_logger, Warning) << "当前通道正在延迟挂机, 通道号码:" << channelID;
 			return -1;
 		default:
 			break;
 		}
+		if (!t->m_call_out_param->m_hungup_by_echo_tone)
+		{
+			BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << "由于设置非响一声挂断, 未挂断本次呼叫请求, 等待超时挂断， 通道号码:" << channelID;
+			return -1;
+		}
 		retVal = SsmHangup(channelID);
 		if (retVal == -1){
 			show_error();
-			BOOST_LOG_SEV(cia_g_logger, Warning) << " 挂机失败, 请在后续版本调查原因, 通道号码:" << channelID;
+			BOOST_LOG_SEV(cia_g_logger, Warning) << "挂机失败, 请在后续版本调查原因, 通道号码:" << channelID;
 		}
 		else{
-			BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << " 已挂断本次呼叫请求, 通道号码:" << channelID;
+			BOOST_LOG_SEV(cia_g_logger, CalloutMsg) << "已挂断本次呼叫请求, 通道号码:" << channelID;
 		}
 		ciaMessage& msg_ = t->m_call_out_param->m_ch_msg->m_procbuffer_msg;
 		std::string transid_ = msg_.transid();
 		msg_.Clear();
 		msg_.set_type(CIA_CALL_RESPONSE);
 		msg_.set_transid(transid_);
-		msg_.set_status(status);		
+		msg_.set_status(status);
 		if (t->m_call_out_param == nullptr)
 		{
 			BOOST_LOG_SEV(cia_g_logger, Critical) << "严重异常: 挂机时发现客户端socket为空";
@@ -374,6 +366,7 @@ int voice_card_control::cti_hangUp(std::size_t channelID, std::string status)
 			t->m_call_out_param->m_base_client->do_write(t->m_call_out_param->m_ch_msg);
 		}
 		t->realseTrunk();
+		unique_lock_.unlock();
 		m_channel_queue.put(channelID);
 	}
 	return retVal;
@@ -464,15 +457,26 @@ int CALLBACK voice_card_control::cti_callback(WORD wEvent, int nReference, DWORD
 int voice_card_control::deal_e_proc_auto_dial(int nReference, DWORD dwParam, DWORD dwUser)
 {
 	int channelID = nReference;
-	std::string trans_id_ = m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid();
+	if (m_trunk_vector.at(channelID)->m_call_out_param == nullptr)
+	{
+		BOOST_LOG_SEV(cia_g_logger, Critical) << "严重：触发deal_e_proc_auto_dial的通道没有关联呼叫请求对象, 通道号码" << channelID;
+		return 1;
+	}
+	std::string trans_id_ = m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid();	
 	switch (dwParam)
 	{
 	case DIAL_STANDBY:	            // 通道空闲，没有执行AutoDial任务
 		break;
 	case DIAL_DIALING:
-		BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << trans_id_
-			<< " DIAL_DIALING 事件: 正在发送被叫号码. 外呼通道号: " << channelID;
-		break;
+		{
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << trans_id_
+				<< " DIAL_DIALING 事件: 正在发送被叫号码. 外呼通道号:" << channelID;
+			boost::shared_ptr<trunk> t = m_trunk_vector.at(nReference);
+			boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex);
+			t->m_step = TRK_CALLOUT_DAIL;
+			t->m_callTime.start();
+			break;
+		}			
 	case DIAL_ECHOTONE:	            // TUP/ISUP通道：表明驱动程序收到对端交换机的地址齐消息(ACM)
 		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trans_id_
 			<< " 在判断ACM后, 接收到 DIAL_ECHOTONE 事件, 挂机. 通道号码:" << channelID;
@@ -480,6 +484,12 @@ int voice_card_control::deal_e_proc_auto_dial(int nReference, DWORD dwParam, DWO
 			<< " 本次从呼叫到检测振铃, 共用时: " << m_trunk_vector.at(nReference)->elpased();
 		{
 			boost::shared_ptr<trunk> t = m_trunk_vector.at(nReference);
+			if (t->m_step != TRK_CALLOUT_DAIL && t->m_step != TRK_WAIT_CONNECT)
+			{
+				BOOST_LOG_SEV(cia_g_logger, Critical) << "严重：触发振铃时通道不是TRK_CALLOUT_DAIL 或 TRK_WAIT_CONNECT状态, 通道的状态:" 
+					<< t->m_step <<" 流水号 : " << trans_id_ << "通道号码:" << channelID;
+				return 1;
+			}
 			if (m_use_strategy)
 			{
 				if (t->elpased() <= m_cti_warning_elapse)
@@ -494,7 +504,7 @@ int voice_card_control::deal_e_proc_auto_dial(int nReference, DWORD dwParam, DWO
 					else
 					{
 						BOOST_LOG_SEV(cia_g_logger, Critical) << "业务流水:" << trans_id_ << "将通道号码放入延迟队列前，尝试改变通道状态， 但试图锁定通道失败";
-					}				
+					}
 					return 1;
 				}
 			}
@@ -655,22 +665,27 @@ void voice_card_control::deal_hungup_strategy()
 			continue;
 		}
 		boost::shared_ptr<trunk> t = m_trunk_vector.at(chID);
+		boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex);
+		if (t->m_step != TRK_SLEEP)
+		{
+			// 重复挂机， 可能因为电话接听等原因此次呼叫已经被挂断
+			return;
+		}
 		std::string trans_id_ = t->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid();
-		t->m_trunk_mutex.lock();
 		int sleeping_elapse = m_cti_sleeping_elapse - t->elpased();
 		if (sleeping_elapse > 0)
 		{
-			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trans_id_ << " 通道号: " << chID
+			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trans_id_ << " 通道号:" << chID
 				<< "触发延迟挂机条件, 开始休眠" << sleeping_elapse << "毫秒";
 			boost::this_thread::sleep_for(boost::chrono::milliseconds(sleeping_elapse));
 		}
 		else
 		{
-			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trans_id_ << " 通道号: " << chID
+			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << trans_id_ << " 通道号:" << chID
 				<< "睡个毛, 去干活. 睡眠时间为:" << sleeping_elapse << "毫秒";
 		}
 		t->m_step = TRK_HUNGUP;
-		t->m_trunk_mutex.unlock();
+		unique_lock_.unlock();
 		cti_hangUp(chID, CIA_CALL_SUCCESS);
 	}
 }

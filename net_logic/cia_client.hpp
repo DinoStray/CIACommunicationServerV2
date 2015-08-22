@@ -57,7 +57,7 @@ private:
 	bool                                            m_started_;
 	boost::timer::cpu_timer                         m_update_time;
 	deadline_timer                                  m_check_timeout_timer;
-	blocking_queue<boost::shared_ptr<chat_message>> m_chat_msg_queue;
+	//blocking_queue<boost::shared_ptr<chat_message>> m_chat_msg_queue;
 	std::size_t                                     m_timeout_elapsed;
 	bool                                            m_is_login;
 	boost::shared_ptr<base_voice_card_control>      m_base_voice_card;
@@ -71,10 +71,10 @@ m_config_server(config_server_)
 	m_timeout_elapsed = m_config_server->get_client_socket_timeout_elapsed();
 	//TODO 后续调整值， 由config server设置
 	std::size_t write_msg_queue_size = 500; // 每个客户端socket持有的缓冲池队列, 数量暂时和iocp处理线程数量一致
-	while (write_msg_queue_size--)
-	{
-		m_chat_msg_queue.Put(boost::make_shared<chat_message>());
-	}
+	//while (write_msg_queue_size--)
+	//{
+	//	m_chat_msg_queue.Put(boost::make_shared<chat_message>());
+	//}
 	m_is_login = false;
 }
 
@@ -112,7 +112,8 @@ void cia_client::stop()
 
 void cia_client::do_read_header()
 {
-	boost::shared_ptr<chat_message> ch_msg_ = m_chat_msg_queue.Take();
+	//boost::shared_ptr<chat_message> ch_msg_ = m_chat_msg_queue.Take();
+	boost::shared_ptr<chat_message> ch_msg_ = boost::make_shared<chat_message>();
 	ptr self = shared_from_this();
 	boost::asio::async_read(m_sock_,
 		boost::asio::buffer(ch_msg_->data(), chat_message::header_length),
@@ -120,7 +121,7 @@ void cia_client::do_read_header()
 	{
 		if (!ec && ch_msg_->decode_header())
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
+			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
 			do_read_body(ch_msg_);
 		}
 		else
@@ -134,17 +135,17 @@ void cia_client::do_read_header()
 inline void cia_client::do_read_body(boost::shared_ptr<chat_message> ch_msg_)
 {
 	ptr self = shared_from_this();
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
+	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
 	boost::asio::async_read(m_sock_,
 		boost::asio::buffer(ch_msg_->body(), ch_msg_->body_length()),
 		[this, self, ch_msg_](boost::system::error_code ec, std::size_t /*length*/)
 	{
 		if (!ec)
 		{
-			m_update_time.start();
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
+			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
 			do_read_header();
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
+			m_update_time.start();
+			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
 			do_deal_request(ch_msg_);
 		}
 		else
@@ -157,14 +158,14 @@ inline void cia_client::do_read_body(boost::shared_ptr<chat_message> ch_msg_)
 
 inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 {
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "当前m_chat_msg_queue队列剩余元素:" << m_chat_msg_queue.Size();
+	//BOOST_LOG_SEV(cia_g_logger, Debug) << "当前m_chat_msg_queue队列剩余元素:" << m_chat_msg_queue.Size();
 	ptr self = shared_from_this();
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步发送数据";
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl << ch_msg->m_procbuffer_msg.DebugString();
+	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步发送数据";
+	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl << ch_msg->m_procbuffer_msg.DebugString();
 	if (!ch_msg->parse_to_cia_msg())
 	{
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "解析待发送的报文出错";
-		m_chat_msg_queue.Put(ch_msg);
+		//m_chat_msg_queue.Put(ch_msg);
 		return;
 	}
 	m_sock_.async_send(boost::asio::buffer(ch_msg->data(), ch_msg->length()),
@@ -175,10 +176,10 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 		}
 		else
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
+			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
 			m_update_time.start();
 		}
-		m_chat_msg_queue.Put(ch_msg);
+		//m_chat_msg_queue.Put(ch_msg);
 	});
 }
 
@@ -217,7 +218,7 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 {
 	if (!ch_msg->parse_cia_mag()) {
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "报文转换失败, 本次请求不做处理";
-		m_chat_msg_queue.Put(ch_msg);
+		//m_chat_msg_queue.Put(ch_msg);
 		return;
 	}
 	BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求的消息体内容为: " << std::endl << ch_msg->m_procbuffer_msg.DebugString();
@@ -226,7 +227,7 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 		do_deal_login_request(ch_msg);
 	}
 	else if (ch_msg->m_procbuffer_msg.type() == CIA_HEART_RESPONSE){
-		m_chat_msg_queue.Put(ch_msg);
+		//m_chat_msg_queue.Put(ch_msg);
 		BOOST_LOG_SEV(cia_g_logger, AllEvent) << "本次请求判断为心跳回应, 已对客户端的最后连接时间做更新";
 		m_update_time.start();
 	}
@@ -244,7 +245,7 @@ inline void cia_client::do_deal_call_out_request(boost::shared_ptr<chat_message>
 
 void cia_client::do_deal_heart_request()
 {
-	boost::shared_ptr<chat_message> ch_msg = m_chat_msg_queue.Take();
+	boost::shared_ptr<chat_message> ch_msg = boost::make_shared<chat_message>();
 	ch_msg->m_procbuffer_msg.Clear();
 	ch_msg->m_procbuffer_msg.set_type(CIA_HEART_REQUEST);
 	do_write(ch_msg);

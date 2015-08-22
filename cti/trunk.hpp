@@ -33,12 +33,11 @@ enum trunk_state {
 */
 class trunk
 {
-private:
-	boost::timer::cpu_timer               m_callTime;	            // 发起呼叫的时间
 public:
 	trunk_state                           m_step;	                // 当前通道的状态  
 	boost::shared_ptr<cti_call_out_param> m_call_out_param;         // 保存本次呼叫相关信息
 	boost::mutex                          m_trunk_mutex;            // 通道锁
+	boost::timer::cpu_timer               m_callTime;	            // 发起呼叫的时间
 
 	trunk()
 	{
@@ -52,7 +51,7 @@ public:
 
 	void reset_trunk(boost::shared_ptr<cti_call_out_param> call_out_param_)
 	{
-		m_step = TRK_CALLOUT_DAIL;
+		m_step = TRK_WAIT_CONNECT;
 		m_call_out_param = call_out_param_;
 		m_callTime.start();
 	}
