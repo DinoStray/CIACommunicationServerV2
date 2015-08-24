@@ -289,7 +289,7 @@ bool config_server::flush_cti_timeout_elapsed()
 
 bool config_server::flush_cti_warning_elapsed()
 {
-	std::string warning_elapse = zk_get_data(ZOO_PATH_BASE_PATH + ZOO_PATH_CTI_WARNING_ELAPSED);
+	std::string warning_elapse = zk_get_data(m_current_node_path + ZOO_PATH_CTI_WARNING_ELAPSED);
 	if (warning_elapse.empty())
 	{
 		BOOST_LOG_SEV(cia_g_logger, Critical) << "获取通讯端端口号失败";
@@ -305,7 +305,7 @@ bool config_server::flush_cti_warning_elapsed()
 
 bool config_server::flush_cti_sleeping_elapsed()
 {
-	std::string sleeping_elapsed = zk_get_data(ZOO_PATH_BASE_PATH + ZOO_PATH_CTI_SLEEPING_ELAPSED);
+	std::string sleeping_elapsed = zk_get_data(m_current_node_path + ZOO_PATH_CTI_SLEEPING_ELAPSED);
 	if (sleeping_elapsed.empty())
 	{
 		BOOST_LOG_SEV(cia_g_logger, Critical) << "获取通讯端端口号失败";

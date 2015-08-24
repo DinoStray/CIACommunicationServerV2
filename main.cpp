@@ -31,9 +31,9 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	boost::shared_ptr<config_server> config_server_ = boost::make_shared<config_server>(argv[1], argv[2]);
-	testNetLogic(config_server_);
+	//testNetLogic(config_server_);
 	//testCTI(config_server_);
-	//test_all(config_server_);
+	test_all(config_server_);
 	//test_config_server(config_server_);
 	boost::this_thread::sleep_for(boost::chrono::seconds(3));
 	config_server_->set_idol_channel_number(0);
@@ -75,10 +75,12 @@ void testCTI(boost::shared_ptr<config_server> config_server_)
 		// 145 服务器 86057405 86057408 86057410	86057415 86057423 86057428
 		//            86057431 86057435 86057437 86057459 86057501 86057851 86057861
 		// 148 服务器 65992764 35993934
-		std::string callerNum = "86051200";
+		// 郑州服务器  65993934  65992764
+		std::string callerNum = "65993934";
 		// 李禹霖 018072710179 018515663997
 		// 马超   018611967787
-		std::string calledNum = "018515663997";
+		// mz 13810055165
+		std::string calledNum = "13810055165";
 		boost::shared_ptr<voice_card_control> p_vcc = boost::make_shared<voice_card_control>(config_server_, true);
 		size_t trans_id = 100;
 		boost::shared_ptr<base_client> client_ptr = boost::make_shared<base_client>();

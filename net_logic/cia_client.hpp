@@ -121,7 +121,7 @@ void cia_client::do_read_header()
 	{
 		if (!ec && ch_msg_->decode_header())
 		{
-			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
 			do_read_body(ch_msg_);
 		}
 		else
@@ -135,17 +135,17 @@ void cia_client::do_read_header()
 inline void cia_client::do_read_body(boost::shared_ptr<chat_message> ch_msg_)
 {
 	ptr self = shared_from_this();
-	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
+	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
 	boost::asio::async_read(m_sock_,
 		boost::asio::buffer(ch_msg_->body(), ch_msg_->body_length()),
 		[this, self, ch_msg_](boost::system::error_code ec, std::size_t /*length*/)
 	{
 		if (!ec)
 		{
-			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
 			do_read_header();
 			m_update_time.start();
-			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
 			do_deal_request(ch_msg_);
 		}
 		else
@@ -160,8 +160,7 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 {
 	//BOOST_LOG_SEV(cia_g_logger, Debug) << "当前m_chat_msg_queue队列剩余元素:" << m_chat_msg_queue.Size();
 	ptr self = shared_from_this();
-	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步发送数据";
-	//d BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl << ch_msg->m_procbuffer_msg.DebugString();
+	BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl << ch_msg->m_procbuffer_msg.DebugString();
 	if (!ch_msg->parse_to_cia_msg())
 	{
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "解析待发送的报文出错";
@@ -176,7 +175,7 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 		}
 		else
 		{
-			//d BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
 			m_update_time.start();
 		}
 		//m_chat_msg_queue.Put(ch_msg);
