@@ -27,6 +27,7 @@ public:
 		m_hungup_by_echo_tone = hungup_by_echo_tone;
 		m_repeat_call_out = true;
 		m_call_time.start();
+		m_repeat_call_out_timer = nullptr;
 	}
 	int cti_call_out_elapsed_milliseconds()
 	{
@@ -61,7 +62,7 @@ public:
 	*/
 	virtual void cti_callout(boost::shared_ptr<cti_call_out_param> cti_call_out_param_)
 	{
-		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "模拟发送呼叫请求";
+		//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "模拟发送呼叫请求";
 		std::string strans_id_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg.transid();
 		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.Clear();
 		cti_call_out_param_->m_ch_msg->m_procbuffer_msg.set_type(CIA_CALL_RESPONSE);

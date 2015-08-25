@@ -329,7 +329,7 @@ bool config_server::flush_cti_set_idol_channel_num_elapsed()
 	std::string elapsed = zk_get_data(ZOO_PATH_BASE_PATH + ZOO_PATH_CTI_SET_IDOL_CHANNEL_NUM_ELAPSED);
 	if (elapsed.empty())
 	{
-		BOOST_LOG_SEV(cia_g_logger, Critical) << "获取通讯端端口号失败";
+		BOOST_LOG_SEV(cia_g_logger, Critical) << "获取设置通道超时时间间隔失败";
 		m_cit_set_idol_channel_elpesed = 0;
 		return false;
 	}

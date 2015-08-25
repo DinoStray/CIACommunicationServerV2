@@ -50,7 +50,8 @@ m_config_server(config_server_)
 	BOOST_LOG_SEV(cia_g_logger, Debug) << "服务器开始准备接收新的连接";
 	m_acceptor_.async_accept(client->sock(), boost::bind(&cia_server::handle_accept, this, client, _1));
 	BOOST_LOG_SEV(cia_g_logger, Debug) << "服务器开始创建异步IO处理线程";
-	for (std::size_t i = 0; i < m_io_comppletions_thread_number; i++)
+	//TODO 暂设
+	for (std::size_t i = 0; i < 24; i++)
 	{
 		m_io_comppletions_thread_.create_thread([this](){
 			m_io_service_.run();
@@ -103,7 +104,7 @@ void cia_server::set_idol_channel_timer()
 
 void cia_server::start()
 {
-
+	m_config_server->set_idol_channel_number(m_base_voice_card->get_idol_channel_number());
 	if (m_config_server->get_cti_set_idol_channel_num_elapsed() != 0)
 	{
 		set_idol_channel_timer();

@@ -17,7 +17,11 @@
 #include <boost/thread.hpp>
 #include <boost/timer/timer.hpp>
 
+
+
 const std::size_t TIMEOUT_CHECK_ELAPSED = 3000;
+
+
 
 using namespace boost::asio;
 using namespace boost::posix_time;
@@ -26,7 +30,7 @@ class cia_client;
 typedef boost::shared_ptr<cia_client> client_ptr;
 std::vector<client_ptr> clients;
 
-class cia_client : 
+class cia_client :
 	public boost::enable_shared_from_this<cia_client>,
 	public boost::noncopyable,
 	public base_client
@@ -47,6 +51,7 @@ public:
 protected:
 	void do_read_header();
 	void do_read_body(boost::shared_ptr<chat_message> ch_msg_);
+	static void do_deal_log();
 	void do_timeout_check();
 	void do_deal_request(boost::shared_ptr<chat_message> ch_msg);
 	void do_deal_call_out_request(boost::shared_ptr<chat_message> msg);
@@ -57,11 +62,11 @@ private:
 	bool                                            m_started_;
 	boost::timer::cpu_timer                         m_update_time;
 	deadline_timer                                  m_check_timeout_timer;
-	//blocking_queue<boost::shared_ptr<chat_message>> m_chat_msg_queue;
 	std::size_t                                     m_timeout_elapsed;
 	bool                                            m_is_login;
 	boost::shared_ptr<base_voice_card_control>      m_base_voice_card;
 	boost::shared_ptr<config_server>                m_config_server;
+	boost::thread_group                             m_deal_ch_msg_group;
 };
 
 cia_client::cia_client(io_service& service, boost::shared_ptr<config_server> config_server_, boost::shared_ptr<base_voice_card_control> base_voice_card) :
@@ -69,12 +74,6 @@ m_sock_(service), m_started_(false), m_check_timeout_timer(service), m_base_voic
 m_config_server(config_server_)
 {
 	m_timeout_elapsed = m_config_server->get_client_socket_timeout_elapsed();
-	//TODO 后续调整值， 由config server设置
-	std::size_t write_msg_queue_size = 500; // 每个客户端socket持有的缓冲池队列, 数量暂时和iocp处理线程数量一致
-	//while (write_msg_queue_size--)
-	//{
-	//	m_chat_msg_queue.Put(boost::make_shared<chat_message>());
-	//}
 	m_is_login = false;
 }
 
@@ -102,6 +101,7 @@ void cia_client::stop()
 	if (!m_started_) return;
 	m_started_ = false;
 	m_sock_.close();
+	m_deal_ch_msg_group.interrupt_all();
 
 	ptr self = shared_from_this();
 	auto it = std::find(clients.begin(), clients.end(), self);
@@ -121,7 +121,7 @@ void cia_client::do_read_header()
 	{
 		if (!ec && ch_msg_->decode_header())
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
+			//	BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据, 消息体长度: " << ch_msg_->body_length();
 			do_read_body(ch_msg_);
 		}
 		else
@@ -135,22 +135,22 @@ void cia_client::do_read_header()
 inline void cia_client::do_read_body(boost::shared_ptr<chat_message> ch_msg_)
 {
 	ptr self = shared_from_this();
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
+	//BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备异步读取数据";	
 	boost::asio::async_read(m_sock_,
 		boost::asio::buffer(ch_msg_->body(), ch_msg_->body_length()),
 		[this, self, ch_msg_](boost::system::error_code ec, std::size_t /*length*/)
 	{
 		if (!ec)
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
+			//BOOST_LOG_SEV(cia_g_logger, Debug) << "已读取新的消息体, 开始进行下一次读取";
 			do_read_header();
 			m_update_time.start();
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
+			//BOOST_LOG_SEV(cia_g_logger, Debug) << "开始解析本次请求的消息体";
 			do_deal_request(ch_msg_);
 		}
 		else
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据出错, 已经关闭此socket, 错误码:  " << ec;
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "接收新的数据出错, 已经关闭此socket, 错误码:" << ec;
 			stop();
 		}
 	});
@@ -160,9 +160,11 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 {
 	//BOOST_LOG_SEV(cia_g_logger, Debug) << "当前m_chat_msg_queue队列剩余元素:" << m_chat_msg_queue.Size();
 	ptr self = shared_from_this();
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl << ch_msg->m_procbuffer_msg.DebugString();
+	//BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl; //<< ch_msg->m_procbuffer_msg.DebugString();
+	//BOOST_LOG_SEV(cia_g_logger, Debug) << "rn id:" << ch_msg->m_procbuffer_msg.transid();
+	LOG_MSG_QUEUE.Put(boost::make_shared<LOG_MSG>(Debug, "异步发送的数据为:\n" + ch_msg->m_procbuffer_msg.DebugString()));
 	if (!ch_msg->parse_to_cia_msg())
-	{
+	{		
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "解析待发送的报文出错";
 		//m_chat_msg_queue.Put(ch_msg);
 		return;
@@ -175,8 +177,7 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 		}
 		else
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
-			m_update_time.start();
+			//BOOST_LOG_SEV(cia_g_logger, Debug) << "已成功异步发送数据, 数据的transid:" << ch_msg->m_procbuffer_msg.transid();
 		}
 		//m_chat_msg_queue.Put(ch_msg);
 	});
@@ -188,8 +189,8 @@ void cia_client::do_timeout_check()
 	{
 		m_check_timeout_timer.expires_from_now(boost::posix_time::milliseconds(TIMEOUT_CHECK_ELAPSED));
 		ptr self = shared_from_this();
-		BOOST_LOG_SEV(cia_g_logger, AllEvent) << "开始准备异步检测超时, 触发检测的时间是在"
-			<< TIMEOUT_CHECK_ELAPSED << "毫秒后, " << "客户端socket超时时间设置为" << m_timeout_elapsed << "毫秒";
+		//BOOST_LOG_SEV(cia_g_logger, AllEvent) << "开始准备异步检测超时, 触发检测的时间是在"
+		//	<< TIMEOUT_CHECK_ELAPSED << "毫秒后, " << "客户端socket超时时间设置为" << m_timeout_elapsed << "毫秒";
 		m_check_timeout_timer.async_wait([this, self](const error_code& ec){
 			if (ec)
 			{
@@ -220,7 +221,9 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 		//m_chat_msg_queue.Put(ch_msg);
 		return;
 	}
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求的消息体内容为: " << std::endl << ch_msg->m_procbuffer_msg.DebugString();
+	LOG_MSG_QUEUE.Put(boost::make_shared<LOG_MSG>(Debug, "接收的数据为:\n" + ch_msg->m_procbuffer_msg.DebugString()));
+	//BOOST_LOG_SEV(cia_g_logger, Debug) << "get id:" << ch_msg->m_procbuffer_msg.transid()
+	//	<< ",cn:" << ch_msg->m_procbuffer_msg.authcode(); //std::endl;// << ch_msg->m_procbuffer_msg.DebugString();
 	if (ch_msg->m_procbuffer_msg.type() == CIA_LOGIN_REQUEST){
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求判断为登陆请求";
 		do_deal_login_request(ch_msg);
@@ -231,7 +234,7 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 		m_update_time.start();
 	}
 	else if (ch_msg->m_procbuffer_msg.type() == CIA_CALL_REQUEST){
-		BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求判断为呼叫请求";
+		//BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求判断为呼叫请求";
 		do_deal_call_out_request(ch_msg);
 	}
 }

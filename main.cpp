@@ -31,13 +31,14 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	boost::shared_ptr<config_server> config_server_ = boost::make_shared<config_server>(argv[1], argv[2]);
-	//testNetLogic(config_server_);
+	testNetLogic(config_server_);
 	//testCTI(config_server_);
-	test_all(config_server_);
+	//test_all(config_server_);
 	//test_config_server(config_server_);
 	boost::this_thread::sleep_for(boost::chrono::seconds(3));
 	config_server_->set_idol_channel_number(0);
 	config_server_->set_started(false);
+	stop_log();
 }
 
 void test_all(boost::shared_ptr<config_server> config_server_)

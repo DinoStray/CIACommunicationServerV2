@@ -151,7 +151,7 @@ void voice_card_control::init_cti()
 	//程序中: SsmSetEvent(E_RCV_Ss7Msu, -1, true, &EventMode);
 	SsmSetEvent(E_RCV_Ss7Msu, -1, true, &EventMode);
 
-	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "正在初始化语音卡通道, 预期耗时10秒";
+	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "正在初始化语音卡通道, 预期耗时15秒";
 	//	为了兼容1号信令，注释以下代码，改为sleep 15秒
 	//while (SsmSearchIdleCallOutCh(160, 0x1E0000) < 0){	                 // 循环等待, 直到能够获取语音卡空闲通道号, 语音卡初始化完毕
 	//	boost::this_thread::sleep_for(boost::chrono::milliseconds(500));
@@ -230,7 +230,7 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 	}
 	catch (std::out_of_range)
 	{
-		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 获取通道失败, 通道全部繁忙";
+		//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 获取通道失败, 通道全部繁忙";
 		//继续下一次呼叫
 		cti_callout_again(cti_call_out_param_);
 		return;
@@ -238,18 +238,19 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 	int ch_state = SsmChkAutoDial(chID);
 	if (ch_state != 0)
 	{
-		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " , 获取到得通道状态为:" << ch_state << ", 不可用，将此通道重新放回。通道号码:" << chID;
+		//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " , 获取到得通道状态为:" << ch_state << ", 不可用，将此通道重新放回。通道号码:" << chID;
 		m_channel_queue.put(chID);
 	}
-	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 获取到的通道号码:" << chID;
+	//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 获取到的通道号码:" << chID;
 	SsmSetTxCallerId(chID, msg_.authcode().c_str());
+	boost::shared_ptr<trunk> t = m_trunk_vector.at(chID);
+	boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex);
 	if (SsmAutoDial(chID, msg_.pn().c_str()) == 0){
-		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 已发送请求, 已将此通道对应状态清空, 通道号码:" << chID;
-		boost::shared_ptr<trunk> t = m_trunk_vector.at(chID);
-		boost::unique_lock<boost::mutex> unique_lock_(t->m_trunk_mutex);
+		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 已发送请求, 已将此通道对应状态清空, 通道号码:" << chID;				
 		t->reset_trunk(cti_call_out_param_);
 	}
 	else {
+		unique_lock_.unlock();
 		m_channel_queue.put(chID);
 		//上一次呼叫失败，继续呼叫
 		if (cti_call_out_param_->m_repeat_call_out)
@@ -281,7 +282,7 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 void voice_card_control::cti_callout_again(boost::shared_ptr<cti_call_out_param> cti_call_out_param_)
 {
 	ciaMessage& msg_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg;
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << msg_.transid() << ", 重复呼叫，已经历时:" << cti_call_out_param_->cti_call_out_elapsed_milliseconds();
+	// BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << msg_.transid() << ", 重复呼叫，已经历时:" << cti_call_out_param_->cti_call_out_elapsed_milliseconds();
 	if (cti_call_out_param_->cti_call_out_elapsed_milliseconds() > 25000) //TODO 将此配置放在config_server对象中
 	{
 		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " 呼叫请求超时";
@@ -296,8 +297,8 @@ void voice_card_control::cti_callout_again(boost::shared_ptr<cti_call_out_param>
 	if (cti_call_out_param_->m_repeat_call_out_timer == nullptr)
 	{
 		cti_call_out_param_->m_repeat_call_out_timer = boost::make_shared<boost::asio::deadline_timer>(m_io_service_);
-		cti_call_out_param_->m_repeat_call_out_timer->expires_from_now(boost::posix_time::millisec(2000)); //TODO 将此配置放在config_server对象中
 	}
+	cti_call_out_param_->m_repeat_call_out_timer->expires_from_now(boost::posix_time::millisec(5000)); //TODO 将此配置放在config_server对象中
 	cti_call_out_param_->m_repeat_call_out_timer->async_wait([this, cti_call_out_param_](const boost::system::error_code& ec){
 		ciaMessage& msg_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg;
 		if (!ec)

@@ -3,12 +3,17 @@
 #include <boost/log/common.hpp>
 #include <boost/log/attributes.hpp>
 #include <boost/log/utility/setup/from_stream.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread.hpp>
+#include "blocking_queue.hpp"
 
 #include <exception>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
+
 
 namespace logging = boost::log;
 namespace attrs = boost::log::attributes;
@@ -35,6 +40,34 @@ BOOST_LOG_INLINE_GLOBAL_LOGGER_DEFAULT(cia_lg, src::severity_logger< >)
 
 src::severity_logger< >& cia_g_logger = cia_lg::get();	                //日志记录
 
+struct LOG_MSG
+{
+	LOG_MSG(severity_level level_, std::string& msg){
+		m_level = level_;
+		m_msg = msg;
+	}
+	severity_level m_level;
+	std::string m_msg;
+};
+
+blocking_queue<boost::shared_ptr<LOG_MSG>> LOG_MSG_QUEUE;
+boost::thread_group log_thread;
+
+void do_deal_log()
+{
+	while (true)
+	{
+		boost::this_thread::interruption_point();
+		boost::shared_ptr<LOG_MSG> log_ = LOG_MSG_QUEUE.Take();
+		BOOST_LOG_SEV(cia_g_logger, log_->m_level) << log_->m_msg;
+	}
+}
+
+void stop_log()
+{
+	log_thread.interrupt_all();
+}
+
 void init_log(std::string log_config_file)
 {
 	try
@@ -56,6 +89,6 @@ void init_log(std::string log_config_file)
 	{
 		throw std::runtime_error(e.what());
 	}
+	log_thread.create_thread(do_deal_log);
 }
-
 #endif	// !BOOST_LOG_HPP_INCLUDE_
