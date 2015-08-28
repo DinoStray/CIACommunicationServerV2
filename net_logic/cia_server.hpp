@@ -27,22 +27,24 @@ public:
 protected:
 	void handle_accept(cia_client::ptr client, const boost::system::error_code & err);
 	void set_idol_channel_timer();
+	void set_started_timer();
 private:
-	io_service m_io_service_;
-	ip::tcp::acceptor m_acceptor_;
-	boost::thread_group m_io_comppletions_thread_;
-	std::size_t m_io_comppletions_thread_number;
-	std::size_t m_client_socket_timeout_elapsed;
+	io_service                                 m_io_service_;
+	ip::tcp::acceptor                          m_acceptor_;
+	boost::thread_group                        m_io_comppletions_thread_;
+	std::size_t                                m_io_comppletions_thread_number;
+	std::size_t                                m_client_socket_timeout_elapsed;
 	boost::shared_ptr<base_voice_card_control> m_base_voice_card;
-	boost::shared_ptr<config_server>       m_config_server;// 配置服务对象
-	deadline_timer m_set_idol_channel_timer;
+	boost::shared_ptr<config_server>           m_config_server;// 配置服务对象
+	deadline_timer                             m_set_idol_channel_timer;
+	deadline_timer                             m_set_started_timer;
 };
 
 cia_server::cia_server(boost::shared_ptr<config_server> config_server_, boost::shared_ptr<base_voice_card_control> base_voice_card) :
 m_io_service_(), m_acceptor_(m_io_service_, ip::tcp::endpoint(ip::tcp::v4(), config_server_->get_server_port())),
 m_base_voice_card(base_voice_card),
 m_set_idol_channel_timer(m_io_service_),
-m_config_server(config_server_)
+m_config_server(config_server_), m_set_started_timer(m_io_service_)
 {
 	m_io_comppletions_thread_number = m_config_server->get_iocp_thread_number();
 	m_client_socket_timeout_elapsed = m_config_server->get_client_socket_timeout_elapsed();
@@ -93,10 +95,6 @@ void cia_server::set_idol_channel_timer()
 		else
 		{
 			m_config_server->set_idol_channel_number(m_base_voice_card->get_idol_channel_number());
-			if (m_config_server->get_started() == 2) // 1 开启 2 关闭 -1 获取节点值失败
-			{
-				m_config_server->set_started(true);
-			}
 			set_idol_channel_timer();
 		}
 	});
@@ -109,6 +107,29 @@ void cia_server::start()
 	{
 		set_idol_channel_timer();
 	}
+	set_started_timer();
+}
+
+void cia_server::set_started_timer()
+{
+	m_set_started_timer.expires_from_now(boost::posix_time::milliseconds(5000));
+	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备定时设置空闲通道数量";
+	ptr self = shared_from_this();
+	m_set_started_timer.async_wait([this, self](const error_code& ec){
+		if (ec)
+		{
+			BOOST_LOG_SEV(cia_g_logger, Debug) << "已停止定时设置空闲通道数量";
+			return;
+		}
+		else
+		{
+			if (m_config_server->get_started() == 2) // 1 开启 2 关闭 -1 获取节点值失败
+			{
+				m_config_server->set_started(true);
+			}
+			set_started_timer();
+		}
+	});
 }
 
 #endif	// !CIA_SERVER_HPP_INCLUDE_

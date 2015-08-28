@@ -256,13 +256,13 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 		if (cti_call_out_param_->m_repeat_call_out)
 		{
 			cti_call_out_param_->m_repeat_call_out = false;
-			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "上一次呼叫失败，继续呼叫";
+			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "上一次呼叫失败，继续呼叫";
 			cti_callout_again(cti_call_out_param_);
 		}
 		//已经连续两次呼叫失败， 直接返回失败
 		else
 		{
-			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "已经连续两次呼叫失败， 直接返回失败";
+			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "已经连续两次呼叫失败， 直接返回失败";
 			std::string transid_ = msg_.transid();
 			msg_.Clear();
 			msg_.set_type(CIA_CALL_RESPONSE);
@@ -303,7 +303,7 @@ void voice_card_control::cti_callout_again(boost::shared_ptr<cti_call_out_param>
 		ciaMessage& msg_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg;
 		if (!ec)
 		{
-			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 开始重复呼叫";
+			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 开始重复呼叫";
 			cti_callout(cti_call_out_param_);
 		}
 		else
