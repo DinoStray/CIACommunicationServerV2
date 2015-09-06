@@ -84,7 +84,7 @@ cia_server::~cia_server()
 void cia_server::set_idol_channel_timer()
 {
 	m_set_idol_channel_timer.expires_from_now(boost::posix_time::milliseconds(m_config_server->get_cti_set_idol_channel_num_elapsed()));
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备定时设置空闲通道数量";
+	BOOST_LOG_SEV(cia_g_logger, AllEvent) << "开始准备定时设置空闲通道数量";
 	ptr self = shared_from_this();
 	m_set_idol_channel_timer.async_wait([this, self](const error_code& ec){
 		if (ec)
@@ -113,12 +113,12 @@ void cia_server::start()
 void cia_server::set_started_timer()
 {
 	m_set_started_timer.expires_from_now(boost::posix_time::milliseconds(5000));
-	BOOST_LOG_SEV(cia_g_logger, Debug) << "开始准备定时设置空闲通道数量";
+	BOOST_LOG_SEV(cia_g_logger, AllEvent) << "开始准备定时设置zookeeper启动状态";
 	ptr self = shared_from_this();
 	m_set_started_timer.async_wait([this, self](const error_code& ec){
 		if (ec)
 		{
-			BOOST_LOG_SEV(cia_g_logger, Debug) << "已停止定时设置空闲通道数量";
+			BOOST_LOG_SEV(cia_g_logger, AllEvent) << "已停止定时设置zookeeper启动状态";
 			return;
 		}
 		else

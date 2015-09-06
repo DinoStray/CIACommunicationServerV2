@@ -160,7 +160,6 @@ void voice_card_control::init_cti()
 	BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "语音卡通道初始化完毕";
 	for (std::size_t i = 0; i < m_numChannelCount; i++){
 		m_channel_queue.put(i);
-		SsmBlockRemoteCh(i);	                                         // 设置通道远端堵塞（禁止来话，但仍可以呼出）
 	}
 }
 
@@ -172,7 +171,7 @@ void voice_card_control::show_error()
 {
 	char buff[5000];
 	SsmGetLastErrMsg(buff);
-	BOOST_LOG_SEV(cia_g_logger, Warning) << buff;
+	BOOST_LOG_SEV(cia_g_logger, Warning) << "SsmGetLastErrMsg：" << buff;
 }
 
 /**
@@ -235,11 +234,13 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 		cti_callout_again(cti_call_out_param_);
 		return;
 	}
-	int ch_state = SsmChkAutoDial(chID);
-	if (ch_state != 0)
+	int ch_state = SsmGetChState(chID);
+	if (ch_state != 0 && ch_state != 123) //空闲或本地闭塞
 	{
-		//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " , 获取到得通道状态为:" << ch_state << ", 不可用，将此通道重新放回。通道号码:" << chID;
+		BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << " , 获取到得通道状态为:" << ch_state << ", 不可用，将此通道重新放回。通道号码:" << chID;
 		m_channel_queue.put(chID);
+		cti_callout_again(cti_call_out_param_);
+		return;
 	}
 	//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 获取到的通道号码:" << chID;
 	SsmSetTxCallerId(chID, msg_.authcode().c_str());
@@ -250,19 +251,20 @@ void voice_card_control::cti_callout(boost::shared_ptr<cti_call_out_param> cti_c
 		t->reset_trunk(cti_call_out_param_);
 	}
 	else {
+		show_error();
 		unique_lock_.unlock();
 		m_channel_queue.put(chID);
 		//上一次呼叫失败，继续呼叫
 		if (cti_call_out_param_->m_repeat_call_out)
 		{
 			cti_call_out_param_->m_repeat_call_out = false;
-			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "上一次呼叫失败，继续呼叫";
+			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "上一次呼叫失败，继续呼叫, 失败原因向上查询SsmGetLastErrMsg";
 			cti_callout_again(cti_call_out_param_);
 		}
 		//已经连续两次呼叫失败， 直接返回失败
 		else
 		{
-			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "已经连续两次呼叫失败， 直接返回失败";
+			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << "已经连续两次呼叫失败， 直接返回失败, 失败原因向上查询SsmGetLastErrMsg";
 			std::string transid_ = msg_.transid();
 			msg_.Clear();
 			msg_.set_type(CIA_CALL_RESPONSE);
@@ -303,7 +305,7 @@ void voice_card_control::cti_callout_again(boost::shared_ptr<cti_call_out_param>
 		ciaMessage& msg_ = cti_call_out_param_->m_ch_msg->m_procbuffer_msg;
 		if (!ec)
 		{
-			//BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 开始重复呼叫";
+			BOOST_LOG_SEV(cia_g_logger, RuntimeInfo) << "业务流水:" << msg_.transid() << ", 开始重复呼叫";
 			cti_callout(cti_call_out_param_);
 		}
 		else
@@ -370,6 +372,7 @@ int voice_card_control::cti_hangUp(std::size_t channelID, std::string status)
 		}
 		else
 		{
+			LOG_MSG_QUEUE.put(boost::make_shared<LOG_MSG>(Debug, "呼叫返回数据:\n" + t->m_call_out_param->m_ch_msg->m_procbuffer_msg.DebugString()));
 			t->m_call_out_param->m_base_client->do_write(t->m_call_out_param->m_ch_msg);
 		}
 		t->realseTrunk();
@@ -390,8 +393,8 @@ int CALLBACK voice_card_control::cti_callback(WORD wEvent, int nReference, DWORD
 		switch (wEvent)
 		{
 		case E_SYS_NoSound:
-			//nReference 通道的逻辑编号 dwParam 不使用
-			//BOOST_LOG_SEV(cia_g_logger, AllEvent) << "语音卡事件: E_SYS_NoSound 信号音检测器：线路上保持静默, 通道的逻辑编号: " << nReference;
+			//nReference 通道号码 dwParam 不使用
+			//BOOST_LOG_SEV(cia_g_logger, AllEvent) << "语音卡事件: E_SYS_NoSound 信号音检测器：线路上保持静默, 通道号码: " << nReference;
 			return 1;
 			break;
 		case E_RCV_Ss7Msu:
@@ -403,32 +406,32 @@ int CALLBACK voice_card_control::cti_callback(WORD wEvent, int nReference, DWORD
 			return 1;
 			break;
 		case E_SYS_BargeIn:
-			//nReference 通道的逻辑编号
+			//nReference 通道号码
 			//dwParam BargeIn检测器的检测结果发生变化：0：Barge In消失 1：检测到BargeIn
 			BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid()
-				<< " 语音卡事件: E_SYS_BargeIn, 通道的逻辑编号: " << nReference
+				<< " 语音卡事件: E_SYS_BargeIn, 通道号码: " << nReference
 				<< ", 检测器的检测结果发生变化 : " << (dwParam == 0 ? "Barge In消失" : "检测到BargeIn");
 			return deal_e_sys_bargein(nReference, dwParam, dwUser);
 			break;
 		case E_PROC_AutoDial:
-			//nReference 通道的逻辑编号
+			//nReference 通道号码
 			//dwParam AutoDial任务进展值，参数的具体含义请参见函数SsmChkAutoDial的说明
 			BOOST_LOG_SEV(cia_g_logger, Debug) << "业务流水:" << m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid()
-				<< " 语音卡事件: E_PROC_AutoDial, 通道的逻辑编号:" << nReference << ", CPGAutoDial任务进展值:" << dwParam;
+				<< " 语音卡事件: E_PROC_AutoDial, 通道号码:" << nReference << ", CPGAutoDial任务进展值:" << dwParam;
 			return deal_e_proc_auto_dial(nReference, dwParam, dwUser);
 			break;
 		case E_RCV_Ss7IsupCpg:
-			//nReference   通道的逻辑编号
+			//nReference   通道号码
 			//dwParam   CPG消息的长度。
 			BOOST_LOG_SEV(cia_g_logger, AllEvent) << "业务流水:" << m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid()
-				<< " 语音卡事件: E_RCV_Ss7IsupCpg, 通道的逻辑编号:" << nReference << ", CPG消息的长度" << dwParam;
+				<< " 语音卡事件: E_RCV_Ss7IsupCpg, 通道号码:" << nReference << ", CPG消息的长度" << dwParam;
 			return 1;
 			break;
 		case E_CHG_ChState:
-			//nReference 通道的逻辑编号
+			//nReference 通道号码
 			//dwParam 高16位比特表示通道的上一个状态值；低16位比特表示通道的新状态值。有关通道状态的取值及其描述请参见函数SsmGetChState的说明
 			BOOST_LOG_SEV(cia_g_logger, AllEvent) << "业务流水:" << m_trunk_vector.at(nReference)->m_call_out_param->m_ch_msg->m_procbuffer_msg.transid()
-				<< " 语音卡事件: E_CHG_ChState 状态机：通道状态发生变化, 通道的逻辑编号:" << nReference
+				<< " 语音卡事件: E_CHG_ChState 状态机：通道状态发生变化, 通道号码:" << nReference
 				<< ", 通道状态转换值:" << dwParam;
 			return 1;
 			break;
@@ -451,7 +454,7 @@ int CALLBACK voice_card_control::cti_callback(WORD wEvent, int nReference, DWORD
 	}
 	catch (std::out_of_range)
 	{
-		BOOST_LOG_SEV(cia_g_logger, Warning) << "异常: 可能向量越界情况出现, 下标值: " << nReference;
+		//BOOST_LOG_SEV(cia_g_logger, Warning) << "异常: 可能向量越界情况出现, 下标值: " << nReference;
 		return 1;
 	}
 
@@ -574,7 +577,7 @@ int voice_card_control::deal_e_proc_auto_dial(int nReference, DWORD dwParam, DWO
 
 int voice_card_control::deal_e_sys_bargein(int nReference, DWORD dwParam, DWORD dwUser)
 {
-	BOOST_LOG_SEV(cia_g_logger, Critical) << "天啊, 呼叫没成功挂断, 不但被接听了, 还检测到对方在说话!!!!!!!!!!";
+	//BOOST_LOG_SEV(cia_g_logger, Critical) << "天啊, 呼叫没成功挂断, 不但被接听了, 还检测到对方在说话!!!!!!!!!!";
 	return 1;
 }
 

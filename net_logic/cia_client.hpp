@@ -162,7 +162,6 @@ inline void cia_client::do_write(boost::shared_ptr<chat_message> ch_msg)
 	ptr self = shared_from_this();
 	//BOOST_LOG_SEV(cia_g_logger, Debug) << "异步发送的数据为:" << std::endl; //<< ch_msg->m_procbuffer_msg.DebugString();
 	//BOOST_LOG_SEV(cia_g_logger, Debug) << "rn id:" << ch_msg->m_procbuffer_msg.transid();
-	LOG_MSG_QUEUE.Put(boost::make_shared<LOG_MSG>(Debug, "异步发送的数据为:\n" + ch_msg->m_procbuffer_msg.DebugString()));
 	if (!ch_msg->parse_to_cia_msg())
 	{		
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "解析待发送的报文出错";
@@ -220,10 +219,7 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "报文转换失败, 本次请求不做处理";
 		//m_chat_msg_queue.Put(ch_msg);
 		return;
-	}
-	LOG_MSG_QUEUE.Put(boost::make_shared<LOG_MSG>(Debug, "接收的数据为:\n" + ch_msg->m_procbuffer_msg.DebugString()));
-	//BOOST_LOG_SEV(cia_g_logger, Debug) << "get id:" << ch_msg->m_procbuffer_msg.transid()
-	//	<< ",cn:" << ch_msg->m_procbuffer_msg.authcode(); //std::endl;// << ch_msg->m_procbuffer_msg.DebugString();
+	}	
 	if (ch_msg->m_procbuffer_msg.type() == CIA_LOGIN_REQUEST){
 		BOOST_LOG_SEV(cia_g_logger, Debug) << "本次请求判断为登陆请求";
 		do_deal_login_request(ch_msg);
@@ -241,6 +237,7 @@ inline void cia_client::do_deal_request(boost::shared_ptr<chat_message> ch_msg)
 
 inline void cia_client::do_deal_call_out_request(boost::shared_ptr<chat_message> ch_msg)
 {
+	LOG_MSG_QUEUE.put(boost::make_shared<LOG_MSG>(Debug, "接收的数据为:\n" + ch_msg->m_procbuffer_msg.DebugString()));
 	ptr self = shared_from_this();
 	m_base_voice_card->cti_callout(boost::make_shared<cti_call_out_param>(self, ch_msg, true));
 }
@@ -250,6 +247,7 @@ void cia_client::do_deal_heart_request()
 	boost::shared_ptr<chat_message> ch_msg = boost::make_shared<chat_message>();
 	ch_msg->m_procbuffer_msg.Clear();
 	ch_msg->m_procbuffer_msg.set_type(CIA_HEART_REQUEST);
+	LOG_MSG_QUEUE.put(boost::make_shared<LOG_MSG>(AllEvent, "心跳请求:\n" + ch_msg->m_procbuffer_msg.DebugString()));
 	do_write(ch_msg);
 }
 
@@ -258,6 +256,7 @@ void cia_client::do_deal_login_request(boost::shared_ptr<chat_message> ch_msg)
 	ch_msg->m_procbuffer_msg.Clear();
 	ch_msg->m_procbuffer_msg.set_type(CIA_LOGIN_RESPONSE);
 	ch_msg->m_procbuffer_msg.set_status(CIA_LOGIN_SUCCESS);
+	LOG_MSG_QUEUE.put(boost::make_shared<LOG_MSG>(RuntimeInfo, "登陆返回数据:\n" + ch_msg->m_procbuffer_msg.DebugString()));
 	do_write(ch_msg);
 	m_is_login = true;
 }

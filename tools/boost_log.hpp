@@ -5,15 +5,13 @@
 #include <boost/log/utility/setup/from_stream.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
-#include "blocking_queue.hpp"
+#include "thread_safe_queue.hpp"
 
 #include <exception>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
-
 
 namespace logging = boost::log;
 namespace attrs = boost::log::attributes;
@@ -50,7 +48,7 @@ struct LOG_MSG
 	std::string m_msg;
 };
 
-blocking_queue<boost::shared_ptr<LOG_MSG>> LOG_MSG_QUEUE;
+thread_safe_queue<boost::shared_ptr<LOG_MSG>> LOG_MSG_QUEUE;
 boost::thread_group log_thread;
 
 void do_deal_log()
@@ -58,8 +56,15 @@ void do_deal_log()
 	while (true)
 	{
 		boost::this_thread::interruption_point();
-		boost::shared_ptr<LOG_MSG> log_ = LOG_MSG_QUEUE.Take();
-		BOOST_LOG_SEV(cia_g_logger, log_->m_level) << log_->m_msg;
+		try
+		{
+			boost::shared_ptr<LOG_MSG> log_ = LOG_MSG_QUEUE.take();
+			BOOST_LOG_SEV(cia_g_logger, log_->m_level) << log_->m_msg;
+		}
+		catch (std::out_of_range)
+		{
+			boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+		}
 	}
 }
 
